@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10302A">
+<title>Fastline – fasting guide and calorie tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://gbfbygqbletknrrikzsc.supabase.co"></script>
+<style>
+:root{--bg:#E9F0EC;--ink:#10302A;--mut:#5B726B;--card:#fff;--line:#CBD9D2;--fast:#C77C00;--eat:#CC4A25;--ok:#2F8F6B}
+@media(prefers-color-scheme:dark){:root{--bg:#0C1D1A;--ink:#E4F0EB;--mut:#8DA79E;--card:#14302B;--line:#24443D;--fast:#F0AE35;--eat:#F27A58;--ok:#58C79C}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.5 "Bricolage Grotesque",system-ui,sans-serif;padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+header{padding:calc(14px + env(safe-area-inset-top,0px)) 18px 4px;display:flex;justify-content:space-between;align-items:baseline}
+h1{font-size:26px;margin:0;font-weight:700;letter-spacing:-.5px}h2{font-size:19px;margin:0 0 8px}h3{font-size:16px;margin:0}
+main{padding:8px 16px;max-width:560px;margin:auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0}
+.mut{color:var(--mut);font-size:14px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sp{justify-content:space-between}
+button{font:inherit;cursor:pointer}
+.btn{background:var(--ink);color:var(--bg);border:0;border-radius:14px;padding:13px 18px;font-weight:700;width:100%}
+.btn.fast{background:var(--fast);color:#fff}.btn.eat{background:var(--eat);color:#fff}.btn.ghost{background:none;color:var(--ink);border:1px solid var(--line);font-weight:500}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 8px;scrollbar-width:none}
+.chip{flex:none;border:1px solid var(--line);background:none;color:var(--ink);border-radius:99px;padding:7px 14px}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:11px;width:100%}
+label{font-size:13px;color:var(--mut);display:block}.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ring{width:240px;max-width:80%;display:block;margin:0 auto}.trk{fill:none;stroke:var(--line);stroke-width:9}.arc{fill:none;stroke:var(--fast);stroke-width:9;stroke-linecap:round;stroke-dasharray:326.7;stroke-dashoffset:326.7;transition:stroke-dashoffset .6s}
+.ring text{fill:var(--ink);font-family:inherit;text-anchor:middle}
+.bar{height:12px;background:var(--line);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--eat);border-radius:9px;transition:width .4s}
+.big{font-size:34px;font-weight:700;letter-spacing:-1px;line-height:1.1}
+details{border-top:1px solid var(--line);padding:10px 0}details:first-of-type{border-top:0}summary{cursor:pointer;display:flex;justify-content:space-between;gap:8px;list-style:none}summary::-webkit-details-marker{display:none}
+.tag{font-size:12px;border:1px solid var(--line);border-radius:99px;padding:1px 9px;color:var(--mut);white-space:nowrap}
+details p{margin:8px 0 0;font-size:15px}.warn{border-left:4px solid var(--eat);border-radius:6px;padding:8px 12px;background:var(--bg);font-size:14px}
+nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{background:none;border:0;color:var(--mut);padding:12px 0;font-size:13px}nav button.on{color:var(--ink);font-weight:700;box-shadow:inset 0 3px 0 var(--fast)}
+.meal{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--line)}.x{background:none;border:0;color:var(--mut);font-size:18px}
+#toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:99px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s}
+:focus-visible{outline:3px solid var(--fast);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header><h1>Fastline</h1><span class="mut" id="who"></span></header>
+<main id="app"></main>
+<nav id="nav"></nav>
+<div id="toast" role="status"></div>
+<script>
+/* ===== 1. CONFIG: paste your Supabase values here (Project settings > API) ===== */
+const CFG={url:'YOUR_SUPABASE_URL',key:'YOUR_SUPABASE_ANON_KEY'};
+const live=!CFG.url.startsWith('YOUR');
+let sb,user=null;
+
+/* ===== 2. Content ===== */
+const PROTOS=[
+{id:'12:12',h:12,lvl:'Beginner',desc:'Fast 12 hours, eat within 12. Often just means no late-night snacking.',who:'First-timers, people who get headaches or dizziness when hungry.',tip:'Finish dinner early, then drink water or herbal tea until breakfast.',caut:'Very low risk for most healthy adults.'},
+{id:'14:10',h:14,lvl:'Beginner',desc:'Fast 14 hours, eat within a 10-hour window, for example 8am to 6pm.',who:'People moving up from 12:12 who want gentle structure.',tip:'Keep protein and fibre in your first meal to stay full.',caut:'Skip it if you are pregnant, breastfeeding or have a history of disordered eating.'},
+{id:'16:8',h:16,lvl:'Popular',desc:'Fast 16 hours, eat within 8. The most widely used schedule, usually skipping breakfast or an early dinner.',who:'Busy people who want one simple daily rule.',tip:'Black coffee, tea and water are fine while fasting. Break the fast with a balanced plate, not a sugary snack.',caut:'People on diabetes medication need medical guidance first.'},
+{id:'18:6',h:18,lvl:'Intermediate',desc:'Fast 18 hours, eat within a 6-hour window, typically two meals.',who:'People comfortable with 16:8 for several weeks.',tip:'Two nutrient-dense meals matter more here: protein, vegetables, whole grains, healthy fats.',caut:'Stop if you feel faint, shaky or unusually irritable.'},
+{id:'20:4',h:20,lvl:'Advanced',desc:'The "Warrior" style: fast 20 hours, eat in a 4-hour window, often one large meal and a snack.',who:'Experienced fasters only.',tip:'Hit your protein target in the window; hydrate and add electrolytes.',caut:'Hard to meet nutrient needs. Not for anyone underweight, pregnant or under 18.'},
+{id:'OMAD',h:23,lvl:'Advanced',desc:'One meal a day: fast about 23 hours and eat a single meal.',who:'Experienced fasters who prefer simplicity.',tip:'Make that one meal complete, with protein, vegetables, carbs and fats.',caut:'Difficult to eat enough calories safely in one sitting. Check with a clinician if unsure.'},
+{id:'5:2',h:24,lvl:'Weekly',desc:'Eat normally 5 days a week. On 2 non-consecutive days, eat roughly 500 to 600 calories.',who:'People who prefer to diet only part of the week.',tip:'Spread the small allowance over 1 to 2 light meals of soup, eggs, vegetables and lean protein.',caut:'Do not use on consecutive days. Avoid if you have diabetes or a history of eating disorders.'},
+{id:'ADF',h:24,lvl:'Weekly',desc:'Alternate-day fasting: a normal day, then a very low-calorie day (about 500 calories), repeating.',who:'People under medical supervision or with prior fasting experience.',tip:'Plan fast days around your calmest schedule. Keep fluids up.',caut:'Demanding and not for most beginners. Speak to a professional first.'},
+{id:'24h',h:24,lvl:'Advanced',desc:'Eat-Stop-Eat: one full 24-hour fast (say dinner to dinner), once or twice a week.',who:'Experienced fasters.',tip:'Break the fast with a normal-sized meal rather than overeating.',caut:'Not for people with diabetes, low blood pressure or who are pregnant.'},
+{id:'36h',h:36,lvl:'Extended',desc:'A 36-hour fast, from dinner one day to breakfast two days later.',who:'Very experienced fasters, occasionally.',tip:'Rest, hydrate, add salt or electrolytes, and break the fast with something light.',caut:'Higher risk. Seek medical advice first and stop if unwell. Fasts beyond 36h need supervision.'},
+{id:'Dawn–dusk',h:14,lvl:'Religious',desc:'Fasting from dawn to sunset as in Ramadan, with no food or drink in daylight hours.',who:'Observers of religious fasts.',tip:'At pre-dawn (suhoor) eat slow-release foods and fluids; break the fast with dates, water, then a balanced meal.',caut:'Those who are ill, pregnant, travelling or on medication should seek guidance on exemptions or adjustments.'}
+];
+const STAGES=[[0,'Fed state','Your body is digesting and using the last meal.'],[4,'Settling','Blood sugar and insulin come down.'],[8,'Switching fuel','Stored glycogen is being used.'],[12,'Fat burning rises','The body leans more on stored fat.'],[18,'Ketones rising','Many people feel a clearer, steadier energy, or just hungry.'],[24,'Deep fast','Only for experienced fasters. Listen to your body.']];
+const QUICK=[['Boiled egg',78,6,1,5],['Banana',105,1,27,0],['Oatmeal, 1 cup',150,5,27,3],['Grilled chicken 100g',165,31,0,4],['Cooked rice, 1 cup',205,4,45,0],['Apple',95,0,25,0],['Greek yoghurt 170g',100,17,6,1],['Lentils, 1 cup',230,18,40,1],['Avocado, half',120,1,6,11],['Mixed salad',60,2,8,3]];
+
+/* ===== 3. Helpers and data layer (Supabase, or localStorage until configured) ===== */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+function toast(t){const e=$('#toast');e.textContent=t;e.style.opacity=1;setTimeout(()=>e.style.opacity=0,2200)}
+const DB={
+async profile(){if(live){const{data}=await sb.from('profiles').select('*').maybeSingle();return data}return LS.get('profile',null)},
+async saveProfile(p){if(live){const{error}=await sb.from('profiles').upsert({...p,user_id:user.id},{onConflict:'user_id'});if(error)throw error}else LS.set('profile',p)},
+async fasts(){if(live){const{data}=await sb.from('fasts').select('*').order('started_at',{ascending:false}).limit(14);return data||[]}return LS.get('fasts',[])},
+async startFast(protocol,goal_hours){const f={protocol,goal_hours,started_at:new Date().toISOString(),ended_at:null};
+ if(live){const{data,error}=await sb.from('fasts').insert(f).select().single();if(error)throw error;return data}
+ f.id=Date.now();const a=LS.get('fasts',[]);a.unshift(f);LS.set('fasts',a);return f},
+async endFast(id){const t=new Date().toISOString();
+ if(live){const{error}=await sb.from('fasts').update({ended_at:t}).eq('id',id);if(error)throw error}
+ else{const a=LS.get('fasts',[]);const f=a.find(x=>x.id==id);if(f)f.ended_at=t;LS.set('fasts',a)}},
+async meals(day){if(live){const{data}=await sb.from('meals').select('*').eq('day',day).order('created_at');return data||[]}return LS.get('meals',[]).filter(m=>m.day===day)},
+async addMeal(m){if(live){const{data,error}=await sb.from('meals').insert(m).select().single();if(error)throw error;return data}
+ m.id=Date.now();const a=LS.get('meals',[]);a.push(m);LS.set('meals',a);return m},
+async delMeal(id){if(live){await sb.from('meals').delete().eq('id',id)}else LS.set('meals',LS.get('meals',[]).filter(m=>m.id!=id))}
+};
+
+/* ===== 4. State ===== */
+const S={tab:'fast',sel:'16:8',profile:null,fasts:[],active:null,meals:[],day:dayStr()};
+const TABS=[['fast','Fast'],['guide','Guide'],['eat','Eat'],['me','Me']];
+const proto=id=>PROTOS.find(p=>p.id===id)||PROTOS[2];
+const stageAt=h=>[...STAGES].reverse().find(s=>h>=s[0]);
+const fmt=ms=>{const t=Math.max(0,Math.floor(ms/1000));return [Math.floor(t/3600),Math.floor(t%3600/60),t%60].map(n=>String(n).padStart(2,'0')).join(':')};
+
+async function load(){
+ try{S.profile=await DB.profile();S.fasts=await DB.fasts();S.active=S.fasts.find(f=>!f.ended_at)||null;S.meals=await DB.meals(S.day)}
+ catch(e){toast('Could not load data: '+(e.message||e))}
+ render();
+}
+
+/* ===== 5. Views ===== */
+function vFast(){
+ const a=S.active,p=proto(a?a.protocol:S.sel);
+ const done=S.fasts.filter(f=>f.ended_at).slice(0,6).map(f=>{const h=(new Date(f.ended_at)-new Date(f.started_at))/36e5;
+  return `<div class="meal"><span>${esc(f.protocol)} <span class="mut">${new Date(f.started_at).toLocaleDateString(undefined,{day:'numeric',month:'short'})}</span></span><span>${h.toFixed(1)}h ${h>=f.goal_hours?'<span style="color:var(--ok)">goal met</span>':'<span class="mut">of '+f.goal_hours+'h</span>'}</span></div>`}).join('');
+ return `<section class="card" style="text-align:center">
+ <svg viewBox="0 0 120 120" class="ring" aria-label="Fasting progress"><circle class="trk" cx="60" cy="60" r="52"/><circle id="arc" class="arc" cx="60" cy="60" r="52" transform="rotate(-90 60 60)"/>
+ <text id="tm" x="60" y="63" font-size="15" font-weight="700">${a?'00:00:00':p.h+'h goal'}</text><text id="st" x="60" y="80" font-size="6.5" style="fill:var(--mut)">${a?'':'Ready when you are'}</text></svg>
+ <p id="stdesc" class="mut" style="min-height:44px;margin:10px 0">${a?'':esc(p.desc)}</p>
+ ${a?`<div class="row" style="justify-content:center;margin-bottom:12px"><span class="tag">${esc(a.protocol)}</span><span class="tag" id="left"></span></div><button class="btn ghost" onclick="endFast()">End fast</button>`
+ :`<div class="chips" role="tablist">${PROTOS.map(x=>`<button class="chip ${x.id===S.sel?'on':''}" onclick="S.sel='${x.id}';render()">${x.id}</button>`).join('')}</div><button class="btn fast" onclick="startFast()">Start ${esc(p.id)} fast</button>`}
+ </section>
+ <section class="card"><h2>Recent fasts</h2>${done||'<p class="mut" style="margin:0">Your finished fasts will appear here.</p>'}</section>`;
+}
+function vGuide(){
+ return `<section class="card"><h2>Fasting types</h2>${PROTOS.map(p=>`<details><summary><h3>${esc(p.id)}</h3><span class="tag">${p.lvl}</span></summary>
+ <p>${esc(p.desc)}</p><p><b>Suits:</b> ${esc(p.who)}</p><p><b>Tip:</b> ${esc(p.tip)}</p><p class="warn">${esc(p.caut)}</p>
+ <p><button class="chip" onclick="S.sel='${p.id}';go('fast')">Use ${esc(p.id)}</button></p></details>`).join('')}</section>
+ <section class="card"><h2>What happens as you fast</h2><p class="mut" style="margin-top:0">Typical pattern. Everyone differs.</p>
+ ${STAGES.map(s=>`<div class="meal"><span><b>${s[1]}</b><br><span class="mut">${s[2]}</span></span><span class="tag">${s[0]}h+</span></div>`).join('')}</section>
+ <section class="card"><h2>Stay safe</h2><p class="warn">Do not fast without medical advice if you are pregnant or breastfeeding, under 18, underweight, have diabetes or take regular medication, or have ever had an eating disorder. Stop and eat if you feel faint, confused or unwell.</p></section>`;
+}
+function totals(){return S.meals.reduce((t,m)=>({k:t.k+m.kcal,p:t.p+(m.protein||0),c:t.c+(m.carbs||0),f:t.f+(m.fat||0)}),{k:0,p:0,c:0,f:0})}
+function vEat(){
+ const t=totals(),goal=S.profile?.target||2000,pct=Math.min(100,t.k/goal*100),left=goal-t.k;
+ return `<section class="card"><div class="row sp"><div><div class="big">${Math.round(t.k)}</div><span class="mut">of ${goal} kcal today</span></div>
+ <div style="text-align:right"><b style="color:${left<0?'var(--eat)':'var(--ok)'}">${left>=0?left+' left':Math.abs(left)+' over'}</b></div></div>
+ <div class="bar" style="margin:12px 0"><i style="width:${pct}%"></i></div>
+ <div class="g3 mut" style="text-align:center"><span>Protein<br><b style="color:var(--ink)">${Math.round(t.p)}g</b></span><span>Carbs<br><b style="color:var(--ink)">${Math.round(t.c)}g</b></span><span>Fat<br><b style="color:var(--ink)">${Math.round(t.f)}g</b></span></div>
+ ${S.profile?'':'<p class="mut" style="margin-bottom:0">Using a default 2000 kcal. Set your own target in the Me tab.</p>'}</section>
+ <section class="card"><h2>Add food</h2><div class="chips">${QUICK.map((q,i)=>`<button class="chip" onclick="quick(${i})">${q[0]}</button>`).join('')}</div>
+ <p class="mut" style="margin:0 0 10px">Quick-add values are approximate.</p>
+ <div class="g2"><div style="grid-column:1/-1"><label for="mn">Food</label><input id="mn" placeholder="e.g. Chicken salad"></div>
+ <div><label for="mk">Calories</label><input id="mk" type="number" inputmode="numeric" min="0"></div><div><label for="mp">Protein g</label><input id="mp" type="number" inputmode="decimal" min="0"></div>
+ <div><label for="mc">Carbs g</label><input id="mc" type="number" inputmode="decimal" min="0"></div><div><label for="mf">Fat g</label><input id="mf" type="number" inputmode="decimal" min="0"></div></div>
+ <button class="btn eat" style="margin-top:12px" onclick="addMeal()">Add to today</button></section>
+ <section class="card"><h2>Today's log</h2>${S.meals.map(m=>`<div class="meal"><span>${esc(m.name)}<br><span class="mut">P ${m.protein||0} · C ${m.carbs||0} · F ${m.fat||0}</span></span><span><b>${m.kcal}</b> <button class="x" aria-label="Delete ${esc(m.name)}" onclick="delMeal('${m.id}')">×</button></span></div>`).join('')||'<p class="mut" style="margin:0">Nothing logged yet. Add your first meal above.</p>'}</section>
+ <section class="card"><h2>Build a healthy plate</h2><p style="margin:0">Fill half with vegetables and fruit, a quarter with lean protein (fish, eggs, beans, chicken), a quarter with whole grains or starchy roots. Add a thumb of healthy fat, drink water, and go easy on sugary drinks and ultra-processed snacks. When you break a fast, start with a balanced meal and eat slowly.</p></section>`;
+}
+function vMe(){
+ const p=S.profile||{sex:'f',age:30,height:165,weight:65,activity:1.4,goal:'lose'};
+ const o=(v,t,c)=>`<option value="${v}" ${String(c)===String(v)?'selected':''}>${t}</option>`;
+ return `<section class="card"><h2>Your calorie target</h2><div class="g2">
+ <div><label for="ps">Sex</label><select id="ps">${o('f','Female',p.sex)}${o('m','Male',p.sex)}</select></div><div><label for="pa">Age</label><input id="pa" type="number" value="${p.age}"></div>
+ <div><label for="ph">Height cm</label><input id="ph" type="number" value="${p.height}"></div><div><label for="pw">Weight kg</label><input id="pw" type="number" value="${p.weight}"></div>
+ <div><label for="pv">Activity</label><select id="pv">${o(1.2,'Mostly sitting',p.activity)}${o(1.4,'Light activity',p.activity)}${o(1.6,'Moderately active',p.activity)}${o(1.8,'Very active',p.activity)}</select></div>
+ <div><label for="pg">Goal</label><select id="pg">${o('lose','Lose gently',p.goal)}${o('keep','Maintain',p.goal)}${o('gain','Gain gently',p.goal)}</select></div></div>
+ <button class="btn" style="margin-top:12px" onclick="saveProfile()">Calculate and save</button>
+ ${S.profile?`<p style="margin-bottom:0">Maintenance ≈ <b>${S.profile.tdee}</b> kcal. Daily target: <b>${S.profile.target}</b> kcal.</p>`:''}
+ <p class="mut" style="margin-bottom:0">Uses the Mifflin-St Jeor estimate. Targets never go below ${p.sex==='m'?1500:1200} kcal and weight changes aim for a slow pace. This is an estimate, not medical advice. It is not meant for under-18s.</p></section>
+ ${live?`<section class="card"><h2>Account</h2><p class="mut" style="margin-top:0">${esc(user.email)}</p><button class="btn ghost" onclick="sb.auth.signOut()">Sign out</button></section>`:`<section class="card"><p class="warn" style="margin:0">Supabase is not configured yet, so data is saved only on this device. Add your keys in index.html to sync across devices.</p></section>`}`;
+}
+function vAuth(){
+ return `<section class="card"><h2>Sign in to sync your data</h2><div class="g2"><div style="grid-column:1/-1"><label for="ae">Email</label><input id="ae" type="email" autocomplete="email"></div>
+ <div style="grid-column:1/-1"><label for="ap">Password (6+ characters)</label><input id="ap" type="password" autocomplete="current-password"></div></div>
+ <div class="g2" style="margin-top:12px"><button class="btn" onclick="auth('in')">Sign in</button><button class="btn ghost" onclick="auth('up')">Create account</button></div></section>`;
+}
+
+/* ===== 6. Actions ===== */
+function render(){
+ $('#who').textContent=live&&user?user.email.split('@')[0]:'';
+ $('#nav').innerHTML=TABS.map(t=>`<button class="${S.tab===t[0]?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join('');
+ $('#app').innerHTML=live&&!user?vAuth():({fast:vFast,guide:vGuide,eat:vEat,me:vMe}[S.tab])();
+ tick();
+}
+function go(t){S.tab=t;render();scrollTo(0,0)}
+async function startFast(){try{const p=proto(S.sel);S.active=await DB.startFast(p.id,p.h);S.fasts.unshift(S.active);render()}catch(e){toast(e.message)}}
+async function endFast(){if(!confirm('End this fast now?'))return;try{await DB.endFast(S.active.id);S.fasts=await DB.fasts();S.active=null;render();toast('Fast saved')}catch(e){toast(e.message)}}
+async function pushMeal(m){try{m.day=S.day;const r=await DB.addMeal(m);S.meals.push(r);render()}catch(e){toast(e.message)}}
+function quick(i){const q=QUICK[i];pushMeal({name:q[0],kcal:q[1],protein:q[2],carbs:q[3],fat:q[4]})}
+function addMeal(){const n=$('#mn').value.trim(),k=+$('#mk').value;if(!n||!(k>=0)||$('#mk').value===''){toast('Enter a food name and calories');return}
+ pushMeal({name:n,kcal:Math.round(k),protein:+$('#mp').value||0,carbs:+$('#mc').value||0,fat:+$('#mf').value||0})}
+async function delMeal(id){try{await DB.delMeal(id);S.meals=S.meals.filter(m=>m.id!=id);render()}catch(e){toast(e.message)}}
+async function saveProfile(){
+ const p={sex:$('#ps').value,age:+$('#pa').value,height:+$('#ph').value,weight:+$('#pw').value,activity:+$('#pv').value,goal:$('#pg').value};
+ if(p.age<18){toast('This calculator is for adults (18+)');return}
+ if(!(p.height>100&&p.weight>25)){toast('Check your height and weight');return}
+ const bmr=10*p.weight+6.25*p.height-5*p.age+(p.sex==='m'?5:-161);
+ p.tdee=Math.round(bmr*p.activity);
+ const adj={lose:-400,keep:0,gain:300}[p.goal],floor=p.sex==='m'?1500:1200;
+ p.target=Math.max(floor,Math.round((p.tdee+adj)/10)*10);
+ try{await DB.saveProfile(p);S.profile=p;render();toast('Target saved: '+p.target+' kcal')}catch(e){toast(e.message)}
+}
+async function auth(m){
+ const email=$('#ae').value.trim(),password=$('#ap').value;
+ const{error,data}=m==='in'?await sb.auth.signInWithPassword({email,password}):await sb.auth.signUp({email,password});
+ if(error)return toast(error.message);
+ if(m==='up'&&!data.session)toast('Check your email to confirm your account');
+}
+function tick(){
+ const a=S.active,arc=$('#arc');if(!arc)return;
+ const p=proto(a?a.protocol:S.sel);
+ if(!a){arc.style.strokeDashoffset=326.7;return}
+ const ms=Date.now()-new Date(a.started_at),h=ms/36e5,goal=a.goal_hours,s=stageAt(h);
+ arc.style.strokeDashoffset=326.7*(1-Math.min(h/goal,1));
+ $('#tm').textContent=fmt(ms);$('#st').textContent=s[1];$('#stdesc').textContent=s[2];
+ $('#left').textContent=h>=goal?'Goal reached 🎉':fmt(goal*36e5-ms)+' to go';
+}
+setInterval(tick,1000);
+
+/* ===== 7. Boot ===== */
+if(live){
+ sb=supabase.createClient(CFG.url,CFG.key);
+ sb.auth.getSession().then(({data})=>{user=data.session?.user||null;user?load():render()});
+ sb.auth.onAuthStateChange((ev,s)=>{const u=s?.user||null;if((u&&u.id)!==(user&&user.id)){user=u;if(u)load();else{S.profile=null;S.fasts=[];S.active=null;S.meals=[];render()}}});
+}else load();
+</script>
+</body>
+</html>
